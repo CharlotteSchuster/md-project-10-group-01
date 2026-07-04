@@ -455,7 +455,23 @@ def simulate_NVE_step(ps: ParticleSystem, sim: SimulationParameters):
 
     apply_periodic_boundary(ps, sim)
         
-    return None      
+    return None  
+
+def simulate_leapfrog_step(ps: ParticleSystem, sim: SimulationParameters): #This is the added code to simulate a leapfrog-algorithm step, in the NVE ensemble
+    """
+    This function was added by Luka. It performs one leapfrog step in the NVE ensemble using the pre-written A and B steps. For details look up the file Leapfrog_theory.ipynb
+    1. Full-step position update (A-step)
+    2. Recalculation the force from the new positions.
+    3. Full-step velocity update (B-step) to get velocities at t+3/2delta_t. The initial half-step velocity is already done before the loop (in the LJ_gas_run_MD.py script).
+    4. Applying periodic boundary conditions.
+    """
+    A_step(ps, sim, half_step = False)
+    calculate_force(ps, sim)
+    B_step(ps, sim, half_step = False)
+    apply_periodic_boundary(ps, sim)
+
+    return None
+
 
 def simulate_NVT_step(ps: ParticleSystem, sim: SimulationParameters):
     """

@@ -38,7 +38,9 @@ from LJ_gas import(
     potential_energy,
     kinetic_energy,
     instantaneous_temperature,
-    ideal_gas_pressure
+    ideal_gas_pressure,
+    simulate_leapfrog_step,
+    B_step
     )
 
 #----------------------------------------------------------------
@@ -80,10 +82,16 @@ temperature = 300     # K
 box_length = 100      # nm
 tau_thermostat = 1  # thermostat coupling constant in 1/ps
 rij_min = 1e-2      # nm
-NVT = True          # switch to decide between NVT and NVE
+NVT = False          # switch to decide between NVT and NVE
+LEAPFROG = True  #switch to decide if the script uses the velocity Verlet or Leapfrog integrator
 
 # output
-file_name_base = "my_simulation"  # file name for all output files
+if LEAPFROG == True:
+    file_name_base = "my_simulation_leapfrog"  # file name for all output files using leapfrog integrator
+elif NVT == True:
+    file_name_base = "my_simulation_NVT"  # file name for all output files using velocity Verlet integrator in NVT ensemble
+else:
+    file_name_base = "my_simulation_NVE"  # file name for all output files using velocity Verlet integrator in NVE ensemble
 
 #----------------------------------------------------------------
 #   P R O G R A M
@@ -145,8 +153,15 @@ energy_trajectory[0,3] = ideal_gas_pressure(ps, sim)      # ideal gas pressure
 #--------------------------------------------------
 #  The acutal MD simulation
 #--------------------------------------------------
+#For the leapfrog algoritm we need to do a half B step forward before the loop (to have the velocities form v(0)-->v(0+1/2 delta_t)):
+if LEAPFROG == True:
+    B_step(ps, sim, half_step=True)
+#Now we enter the MD loop
+# A third branch was added by Luka to be able to call the simulate_leapfrog_step function
 for i in range(sim.n_steps):
-    if NVT==True:
+    if LEAPFROG == True:
+        simulate_leapfrog_step(ps, sim)
+    elif NVT==True:
         simulate_NVT_step(ps, sim)
     else: 
         simulate_NVE_step(ps, sim)
