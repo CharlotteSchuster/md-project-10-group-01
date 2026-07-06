@@ -38,7 +38,9 @@ from LJ_gas import(
     potential_energy,
     kinetic_energy,
     instantaneous_temperature,
-    ideal_gas_pressure
+    ideal_gas_pressure, 
+    simulate_NVE_step_leap_frog,        #added
+    initialising_leapfrog               #added
     )
 
 #----------------------------------------------------------------
@@ -80,7 +82,7 @@ temperature = 300     # K
 box_length = 100      # nm
 tau_thermostat = 1  # thermostat coupling constant in 1/ps
 rij_min = 1e-2      # nm
-NVT = True          # switch to decide between NVT and NVE
+NVT = False          # switch to decide between NVT and NVE
 
 # output
 file_name_base = "my_simulation"  # file name for all output files
@@ -142,14 +144,22 @@ energy_trajectory[0,2] = instantaneous_temperature(ps)    # instantaneous pressu
 energy_trajectory[0,3] = ideal_gas_pressure(ps, sim)      # ideal gas pressure
 
 
+
+
 #--------------------------------------------------
 #  The acutal MD simulation
 #--------------------------------------------------
 for i in range(sim.n_steps):
+    #modification start
+    simulate_NVE_step_leap_frog(ps, sim)
+
+    """
     if NVT==True:
         simulate_NVT_step(ps, sim)
     else: 
         simulate_NVE_step(ps, sim)
+    """
+    #modification end
         
     # store updated positions
     position_trajectory[i+1,:,:] = ps.position # store updated positions
