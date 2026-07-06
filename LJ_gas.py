@@ -386,7 +386,9 @@ def B_step(ps: ParticleSystem, sim: SimulationParameters, half_step=False):
     # now it is explicit: (N,1) * (N,3)
     ps.velocity = ps.velocity + (1/ps.mass)[:, np.newaxis]* dt * ps.force 
     
-    return None    
+    return None
+
+  
 
 def O_step(ps: ParticleSystem, sim: SimulationParameters, half_step=False):
     """
@@ -427,6 +429,8 @@ def O_step(ps: ParticleSystem, sim: SimulationParameters, half_step=False):
     
     return None    
 
+#change this part for our project 
+#Leapfrog and Verlet algorithms address both Newtons equations 
 def simulate_NVE_step(ps: ParticleSystem, sim: SimulationParameters):
     """
     Performs a single time step of molecular dynamics in the NVE ensemble
@@ -448,11 +452,80 @@ def simulate_NVE_step(ps: ParticleSystem, sim: SimulationParameters):
     Returns:
         None. Updates ps.position, ps.velocity, and ps.force in-place.
     """
+
     B_step(ps, sim, half_step=True)   # update velocity by a half-step
     A_step(ps, sim, half_step=False)  # update position by a full time step
     calculate_force(ps, sim)          # udpate force  
     B_step(ps, sim, half_step=True)   # update velocity by a second half-step
 
+    apply_periodic_boundary(ps, sim)
+        
+    return None 
+
+
+
+
+#modification added
+def initialising_leapfrog(ps: ParticleSystem, sim: SimulationParameters):
+    """
+    in LJ_gas_runMD.py the ParticleSystem is already initialised by
+    # set initial positions     
+    initialize_positions(ps, sim.box_length)
+
+    # set initial velocities     
+    initialize_velocities(ps, sim.temperature)
+
+    # calculate force according to initial positions
+    calculate_force(ps, sim)
+
+    """ 
+        
+    # (1/ps.mass)[:, np.newaxis] = explicit reshaping to avoid
+    # broadcasting issues when multiplying (N,) with (N,3) elementwise
+    # now it is explicit: (N,1) * (N,3)
+    velocity_half_step = ps.velocity - (1/ps.mass)[:, np.newaxis]* 0.5 * sim.dt * ps.force     # - 0.5 * sim.dt
+    #ps.velocity_half_step = ps.velocity + (1/ps.mass)[:, np.newaxis]* 0.5 * sim.dt * ps.force       # + 0.5 * sim.dt
+    
+
+    return velocity_half_step
+
+#modification added
+def simulate_NVE_step_leap_frog(ps: ParticleSystem, sim: SimulationParameters):
+    """
+    Algorithm that performs calculation of position and velocity updates
+    that leap over each other for one single time step dt
+    
+    Beforehand, outside of this function, it is necessary to:
+    1. Evaluating force at initial position
+    2. Computing velocity at half-steps at t - 1/2 
+    3. Computing velocity at half-steps at t + 1/2
+    4. Initialising loop from t = 0 to t = NT - 1
+
+    Inside this function, for every time step:
+        - Evaluating force at position t
+        - Computing velocity at half steps at t + 1
+        - Computing position at t + 1
+        - Computing velocity at t + 1
+        - Apply periodic boundary conditions
+
+
+    This corresponds to a time-symmetric, second-order accurate (?) integrator for Newtonian dynamics.
+
+    Parameters:
+        - ps (ParticleSystem): The particle system containing positions, velocities, and forces.
+        - sim (SimulationParameters): Simulation parameters including time step.
+
+    Returns:
+        None. Updates ps.position, ps.velocity, and ps.force in-place.
+    """
+    calculate_force(ps, sim)          # udpate force
+    
+    previous_velocity_half_step = velocity_half_step.copy()
+
+    velocity_half_step += (1/ps.mass)[:, np.newaxis]* sim.dt * ps.force          # a whole time step sim.dt
+    ps.position += ps.velocity_half_step * sim.dt
+    ps.velocity = (previous_velocity_half_step + velocity_half_step) * 0.5               #difference between two half steps divided by 2
+    
     apply_periodic_boundary(ps, sim)
         
     return None      
