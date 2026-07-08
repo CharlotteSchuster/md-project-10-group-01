@@ -146,7 +146,7 @@ position_trajectory[0,:,:] = ps.position # initial position
 energy_trajectory = np.zeros((sim.n_steps+1, 4))
 energy_trajectory[0,0] = potential_energy( ps, sim)       # potential energy
 energy_trajectory[0,1] = kinetic_energy(ps)               # kinetic energy
-energy_trajectory[0,2] = instantaneous_temperature(ps)    # instantaneous pressure
+energy_trajectory[0,2] = instantaneous_temperature(ps)    # instantaneous temperature
 energy_trajectory[0,3] = ideal_gas_pressure(ps, sim)      # ideal gas pressure
 
 
@@ -158,23 +158,42 @@ if LEAPFROG == True:
     B_step(ps, sim, half_step=True)
 #Now we enter the MD loop
 # A third branch was added by Luka to be able to call the simulate_leapfrog_step function
+# In the branch I also added the code to average the velocities between the two half steps, so that we get a velocity at integer time steps, which is used for
+# the calculation of the kinetic energy.
 for i in range(sim.n_steps):
     if LEAPFROG == True:
-        simulate_leapfrog_step(ps, sim)
+        v_before = ps.velocity.copy() # store the velocities before the loop, so if t=0, it stores v(0+1/2 delta_t)
+        simulate_leapfrog_step(ps, sim) #simulates one leapfrog step, which is a full step in time for the positions and a half step for the velocities
+        v_after = ps.velocity.copy() # store the velocities after the loop, so if t=0, it stores v(1+1/2 delta_t)
+        v_sync = 0.5 * (v_before + v_after) # average of the velocities to get a velocity at integer time step
+        
+        #Now we have to temporarily replace the velocity with the synchronized velocity (at integer time step) for energy calculation
+        v_actual = ps.velocity.copy() # store the actual velocity (at half time step)
+        ps.velocity = v_sync # replace the velocity with the synchronized velocity (at integer time step)
+        #Now calculating the energies with the synchronized velocity (at integer time step)
+        energy_trajectory[i+1,0] = potential_energy(ps,sim) # calculate the potential energy with the synchronized velocity
+        energy_trajectory[i+1,1] = kinetic_energy(ps) # calculate the kinetic energy with the synchronized velocity
+        energy_trajectory[i+1,2] = instantaneous_temperature(ps) # calculate the instantaneous temperature with the synchronized velocity
+        energy_trajectory[i+1,3] = ideal_gas_pressure(ps, sim) # calculate the ideal gas pressure with the synchronized velocity
+        ps.velocity = v_actual # replace the velocity back to the actual velocity (at half time step)
+    
     elif NVT==True:
         simulate_NVT_step(ps, sim)
+        # store updated energies, temperature and pressure
+        energy_trajectory[i+1,0] = potential_energy( ps, sim)     # potential energy
+        energy_trajectory[i+1,1] = kinetic_energy(ps)             # kinetic energy
+        energy_trajectory[i+1,2] = instantaneous_temperature(ps)  # instantaneous temperature
+        energy_trajectory[i+1,3] = ideal_gas_pressure(ps, sim)    # ideal gas pressure
     else: 
         simulate_NVE_step(ps, sim)
+        # store updated energies, temperature and pressure
+        energy_trajectory[i+1,0] = potential_energy( ps, sim)     # potential energy
+        energy_trajectory[i+1,1] = kinetic_energy(ps)             # kinetic energy
+        energy_trajectory[i+1,2] = instantaneous_temperature(ps)  # instantaneous temperature
+        energy_trajectory[i+1,3] = ideal_gas_pressure(ps, sim)    # ideal gas pressure
         
     # store updated positions
     position_trajectory[i+1,:,:] = ps.position # store updated positions
-
-    # store updated energies, temperature and pressure
-    energy_trajectory[i+1,0] = potential_energy( ps, sim)     # potential energy
-    energy_trajectory[i+1,1] = kinetic_energy(ps)             # kinetic energy
-    energy_trajectory[i+1,2] = instantaneous_temperature(ps)  # instantaneous pressure
-    energy_trajectory[i+1,3] = ideal_gas_pressure(ps, sim)    # ideal gas pressure
-
 
 #--------------------------------------
 # W R I T E    T R A J E C T O R I E S 

@@ -465,16 +465,18 @@ def simulate_leapfrog_step(ps: ParticleSystem, sim: SimulationParameters): #This
     3. Full-step velocity update (B-step) to get velocities at t+3/2delta_t. The initial half-step velocity is already done before the loop (in the LJ_gas_run_MD.py script).
     4. Applying periodic boundary conditions.
     """
+
+    #calculate_force(ps, sim) #I think this is incorrect
+    #B_step(ps, sim, half_step = False)
+    #A_step(ps, sim, half_step = False)
+    #apply_periodic_boundary(ps, sim)
+    
+    #I beliceve this is the correct order of the steps for the leapfrog algorithm:
+    A_step(ps, sim, half_step = False)
     calculate_force(ps, sim)
     B_step(ps, sim, half_step = False)
-    A_step(ps, sim, half_step = False)
     apply_periodic_boundary(ps, sim)
-    """
-    A_step(ps, sim, half_step = False)
-    calculate_force(ps, sim)
-    B_step(ps, sim, half_step = False)
-    apply_periodic_boundary(ps, sim)
-    """
+    
     return None
 
 
