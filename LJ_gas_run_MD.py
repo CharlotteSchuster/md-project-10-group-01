@@ -100,11 +100,6 @@ else:
 #----------------------------------------------------------------
 # start the timer
 tic()
-
-#Toggle random seed or off:
-
-if RSeed == True:
-    np.random.seed(random_seed)
 #
 # initialize simulation parameters
 #
@@ -124,6 +119,10 @@ ps = ParticleSystem(n_particles)
 # fill in the parameters for argon
 for i in range(n_particles): 
     ps.set_parameters(i, mass=mass_argon, sigma=sigma_argon, epsilon=epsilon_argon)
+
+#Toggle random seed or off:
+if RSeed == True:
+    np.random.seed(random_seed)
 
 # set initial positions     
 initialize_positions(ps, sim.box_length)
