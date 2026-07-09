@@ -84,6 +84,8 @@ tau_thermostat = 1  # thermostat coupling constant in 1/ps
 rij_min = 1e-2      # nm
 NVT = False          # switch to decide between NVT and NVE
 LEAPFROG = True  #switch to decide if the script uses the velocity Verlet or Leapfrog integrator
+RSeed = True          # toggle to decide if the random seed is used or not
+random_seed = 42      # random seed for comparisons between integrators
 
 # output
 if LEAPFROG == True:
@@ -99,6 +101,10 @@ else:
 # start the timer
 tic()
 
+#Toggle random seed or off:
+
+if RSeed == True:
+    np.random.seed(random_seed)
 #
 # initialize simulation parameters
 #
