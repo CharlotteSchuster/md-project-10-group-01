@@ -459,22 +459,37 @@ def simulate_NVE_step(ps: ParticleSystem, sim: SimulationParameters):
 
 def simulate_leapfrog_step(ps: ParticleSystem, sim: SimulationParameters): #This is the added code to simulate a leapfrog-algorithm step, in the NVE ensemble
     """
-    This function was added by Luka. It performs one leapfrog step in the NVE ensemble using the pre-written A and B steps. For details look up the file Leapfrog_theory.ipynb
+    This function was added by Luka. It performs a single time step of molecular dynamics 
+    in the NVE ensemble using the Leapfrog integrator in AB form:
+
+    For details look up the file Leapfrog_theory.ipynb
+
+    **Outside of this function in LJ_gas_run_MD.py**
+    - positions, foces initially at t = 0
+    - initialising first half-step velocity B at t = 0.5
+    
+
+    The steps inside this function are:
     1. Full-step position update (A-step)
     2. Recalculation the force from the new positions.
-    3. Full-step velocity update (B-step) to get velocities at t+3/2delta_t. The initial half-step velocity is already done before the loop (in the LJ_gas_run_MD.py script).
+    3. Full-step velocity update (B-step) to get velocities at t + 1.5 * delta_t. 
     4. Applying periodic boundary conditions.
-    """
 
-    #calculate_force(ps, sim) #I think this is incorrect
-    #B_step(ps, sim, half_step = False)
-    #A_step(ps, sim, half_step = False)
-    #apply_periodic_boundary(ps, sim)
+    This corresponds to a time-symmetric, second-order accurate integrator for Newtonian dynamics.
+    #TODO lets discuss second-order accuracy again but I think it's correct because O(Delta**3)
+
+    Parameters:
+        - ps (ParticleSystem): The particle system containing positions, velocities, and forces.
+        - sim (SimulationParameters): Simulation parameters including time step.
+
+    Returns:
+        None. Updates ps.position, ps.velocity, and ps.force in-place.
+    """
     
-    #I beliceve this is the correct order of the steps for the leapfrog algorithm:
-    A_step(ps, sim, half_step = False)
-    calculate_force(ps, sim)
-    B_step(ps, sim, half_step = False)
+    A_step(ps, sim, half_step = False)      # update position by a full time step
+    calculate_force(ps, sim)                # udpate force
+    B_step(ps, sim, half_step = False)      # update velocity by a full time step, 
+                                            # now a half-step ahead of position and forces
     apply_periodic_boundary(ps, sim)
     
     return None

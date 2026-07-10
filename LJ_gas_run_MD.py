@@ -10,6 +10,12 @@ and visualizes results.
 Author: Bettina Keller
 Created: May 28, 2025
 
+Modified by: Luka Jurečič, Charlotte Schuster
+Date: July 10, 2026 #TODO
+
+Modifications include:
+#TODO
+
 This script imports all classes and functions from md_simulation.py and controls
 the simulation workflow.
 
@@ -76,24 +82,28 @@ sigma_argon = 0.34              # sigma in nm     Argon: 0.34
 epsilon_argon = 120*R*1e-3      # epsilon in kJ/mol Argon: 120
 
 # simulation
-dt = 0.1             # ps
+dt = 0.1                # ps
 n_steps = 1000 
-temperature = 300     # K
-box_length = 100      # nm
-tau_thermostat = 1  # thermostat coupling constant in 1/ps
-rij_min = 1e-2      # nm
-NVT = False          # switch to decide between NVT and NVE
-LEAPFROG = True  #switch to decide if the script uses the velocity Verlet or Leapfrog integrator
-RSeed = True          # toggle to decide if the random seed is used or not
-random_seed = 42      # random seed for comparisons between integrators
+temperature = 300       # K
+box_length = 100        # nm
+tau_thermostat = 1      # thermostat coupling constant in 1/ps
+rij_min = 1e-2          # nm
+NVT = False              # switch to decide between NVT and NVE
+LEAPFROG = False        # switch to decide if the script uses the velocity Verlet or Leapfrog integrator
+RSeed = True            # switch to decide if the random seed is used or not
+random_seed = 42        # a random seed (RSeed = True) is necessary for comparisons between integrators
 
 # output
 if LEAPFROG == True:
-    file_name_base = "my_simulation_leapfrog"  # file name for all output files using leapfrog integrator
+    file_name_base = "my_simulation_NVE_leapfrog"   # file name for all output files using 
+                                                    # leapfrog integrator
 elif NVT == True:
-    file_name_base = "my_simulation_NVT"  # file name for all output files using velocity Verlet integrator in NVT ensemble
+    file_name_base = "my_simulation_NVT_Langevin"   # file name for all output files using 
+                                                    # Langevin integrator (BAOAB splitting) in NVT ensemble
+                                                    #TODO Discuss this
 else:
-    file_name_base = "my_simulation_NVE"  # file name for all output files using velocity Verlet integrator in NVE ensemble
+    file_name_base = "my_simulation_NVE_vVerlet"    # file name for all output files using 
+                                                    # velocity Verlet integrator in NVE ensemble
 
 #----------------------------------------------------------------
 #   P R O G R A M
@@ -120,7 +130,7 @@ ps = ParticleSystem(n_particles)
 for i in range(n_particles): 
     ps.set_parameters(i, mass=mass_argon, sigma=sigma_argon, epsilon=epsilon_argon)
 
-#Toggle random seed or off:
+# Switch random seed or off:
 if RSeed == True:
     np.random.seed(random_seed)
 
@@ -158,44 +168,78 @@ energy_trajectory[0,3] = ideal_gas_pressure(ps, sim)      # ideal gas pressure
 #--------------------------------------------------
 #  The acutal MD simulation
 #--------------------------------------------------
-#For the leapfrog algoritm we need to do a half B step forward before the loop (to have the velocities form v(0)-->v(0+1/2 delta_t)):
+
+# For the leapfrog algoritm we need to do a half B step forward before 
+# entering the function simulate_leapfrog_step(ps, sim)
+# (to have the velocities from v(t = 0) --> v(t = 0+1/2 delta_t)):
 if LEAPFROG == True:
     B_step(ps, sim, half_step=True)
-#Now we enter the MD loop
-# A third branch was added by Luka to be able to call the simulate_leapfrog_step function
+
+
+
+# A third branch was added by Luka to be able to call the simulate_leapfrog_step function 
 # In the branch I also added the code to average the velocities between the two half steps, so that we get a velocity at integer time steps, which is used for
 # the calculation of the kinetic energy.
+#TODO should we delete this?
+
 for i in range(sim.n_steps):
+    '''
+    This loop computes potential and kintetic energiy updates, instantaneous temperature updates and ideal gas pressure updates
+    for every simulation step;
+    with respect to the Leapfrog algorithm, the Langevin integrator or the velocity Verlet integrator
+    '''
     if LEAPFROG == True:
-        v_before = ps.velocity.copy() # store the velocities before the loop, so if t=0, it stores v(0+1/2 delta_t)
-        simulate_leapfrog_step(ps, sim) #simulates one leapfrog step, which is a full step in time for the positions and a half step for the velocities
-        v_after = ps.velocity.copy() # store the velocities after the loop, so if t=0, it stores v(1+1/2 delta_t)
-        v_sync = 0.5 * (v_before + v_after) # average of the velocities to get a velocity at integer time step
+        '''
+        This is the loop for the Leapfrog algorithm
+        For every time step, the function simulate_leapfrog_step(ps, sim) is called
+        '''
+        v_before = ps.velocity.copy()                           # store the velocities before the loop, 
+                                                                # so if t=0, it stores v(0 + 0.5 * delta_t)
+        simulate_leapfrog_step(ps, sim)                         # simulates one leapfrog step, which is a full step in
+                                                                # time for the positions and a half step for the velocities #TODO delete this line?
+                                                                # TODO I would say:
+                                                                # simulates one leapfrog step
+                                                                # first loop: positions at t = 1, velocities at t = 1.5 * delta_t
+        v_after = ps.velocity.copy()                            # store the velocities after the loop, so if t=0,
+                                                                # TODO you mean: i=0 which means t=1, because i= 0,1,2, n-1
+                                                                # it stores v(1.5 * delta_t)
+        v_sync = 0.5 * (v_before + v_after)                     # averaged velocity at integer time step
+                                                                # for the first loop v(t = 1)
         
-        #Now we have to temporarily replace the velocity with the synchronized velocity (at integer time step) for energy calculation
-        v_actual = ps.velocity.copy() # store the actual velocity (at half time step)
-        ps.velocity = v_sync # replace the velocity with the synchronized velocity (at integer time step)
+        # Using synchronized velocity for energy calculation
+        v_actual = ps.velocity.copy()                           # store the actual velocity (at half time step)
+        ps.velocity = v_sync                                    # temporarily replacing the velocity with the synchronized velocity 
+
         #Now calculating the energies with the synchronized velocity (at integer time step)
-        energy_trajectory[i+1,0] = potential_energy(ps,sim) # calculate the potential energy with the synchronized velocity
-        energy_trajectory[i+1,1] = kinetic_energy(ps) # calculate the kinetic energy with the synchronized velocity
-        energy_trajectory[i+1,2] = instantaneous_temperature(ps) # calculate the instantaneous temperature with the synchronized velocity
-        energy_trajectory[i+1,3] = ideal_gas_pressure(ps, sim) # calculate the ideal gas pressure with the synchronized velocity
-        ps.velocity = v_actual # replace the velocity back to the actual velocity (at half time step)
+        energy_trajectory[i+1,0] = potential_energy(ps,sim)     # calculate the potential energy with the synchronized velocity
+        energy_trajectory[i+1,1] = kinetic_energy(ps)           # calculate the kinetic energy with the synchronized velocity
+        energy_trajectory[i+1,2] = instantaneous_temperature(ps)# calculate the instantaneous temperature with the synchronized velocity
+        energy_trajectory[i+1,3] = ideal_gas_pressure(ps, sim)  # calculate the ideal gas pressure with the synchronized velocity
+
+        ps.velocity = v_actual                                  # replace the velocity back to the actual velocity (at half time step)
     
-    elif NVT==True:
-        simulate_NVT_step(ps, sim)
+    else:
+        if NVT==True:
+            '''
+            This is the loop for the Langevin integrator (BAOAB splitting) in NVT ensemble
+            For every time step, the function simulate_NVT_step(ps, sim) is called
+            '''
+            simulate_NVT_step(ps, sim)
+            
+        else: 
+            '''
+            This is the loop for the velocity Verlet integrator in NVE ensemble.
+            For every time step, the function simulate_NVE_step(ps, sim) is called
+            '''
+            simulate_NVE_step(ps, sim)
+        
         # store updated energies, temperature and pressure
         energy_trajectory[i+1,0] = potential_energy( ps, sim)     # potential energy
         energy_trajectory[i+1,1] = kinetic_energy(ps)             # kinetic energy
         energy_trajectory[i+1,2] = instantaneous_temperature(ps)  # instantaneous temperature
         energy_trajectory[i+1,3] = ideal_gas_pressure(ps, sim)    # ideal gas pressure
-    else: 
-        simulate_NVE_step(ps, sim)
-        # store updated energies, temperature and pressure
-        energy_trajectory[i+1,0] = potential_energy( ps, sim)     # potential energy
-        energy_trajectory[i+1,1] = kinetic_energy(ps)             # kinetic energy
-        energy_trajectory[i+1,2] = instantaneous_temperature(ps)  # instantaneous temperature
-        energy_trajectory[i+1,3] = ideal_gas_pressure(ps, sim)    # ideal gas pressure
+    
+        
         
     # store updated positions
     position_trajectory[i+1,:,:] = ps.position # store updated positions
