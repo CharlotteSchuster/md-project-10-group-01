@@ -100,7 +100,7 @@ if LEAPFROG == True:
 elif NVT == True:
     file_name_base = "my_simulation_NVT_Langevin"   # file name for all output files using 
                                                     # Langevin integrator (BAOAB splitting) in NVT ensemble
-                                                    #TODO Discuss this
+
 else:
     file_name_base = "my_simulation_NVE_vVerlet"    # file name for all output files using 
                                                     # velocity Verlet integrator in NVE ensemble
@@ -177,11 +177,6 @@ if LEAPFROG == True:
 
 
 
-# A third branch was added by Luka to be able to call the simulate_leapfrog_step function 
-# In the branch I also added the code to average the velocities between the two half steps, so that we get a velocity at integer time steps, which is used for
-# the calculation of the kinetic energy.
-#TODO should we delete this?
-
 for i in range(sim.n_steps):
     '''
     This loop computes potential and kintetic energiy updates, instantaneous temperature updates and ideal gas pressure updates
@@ -195,13 +190,9 @@ for i in range(sim.n_steps):
         '''
         v_before = ps.velocity.copy()                           # store the velocities before the loop, 
                                                                 # so if t=0, it stores v(0 + 0.5 * delta_t)
-        simulate_leapfrog_step(ps, sim)                         # simulates one leapfrog step, which is a full step in
-                                                                # time for the positions and a half step for the velocities #TODO delete this line?
-                                                                # TODO I would say:
-                                                                # simulates one leapfrog step
-                                                                # first loop: positions at t = 1, velocities at t = 1.5 * delta_t
-        v_after = ps.velocity.copy()                            # store the velocities after the loop, so if t=0,
-                                                                # TODO you mean: i=0 which means t=1, because i= 0,1,2, n-1
+        simulate_leapfrog_step(ps, sim)                         # simulates one leapfrog step
+                                                                # first loop: positions at t = 1, velocities at t = 1.5 * delta_t                
+        v_after = ps.velocity.copy()                            # store the velocities after the loop, so if i=0 (which means t=1)
                                                                 # it stores v(1.5 * delta_t)
         v_sync = 0.5 * (v_before + v_after)                     # averaged velocity at integer time step
                                                                 # for the first loop v(t = 1)
@@ -296,9 +287,9 @@ plt.show()
 #
 # Total Energy
 #
-E_tot = energy_trajectory[:,0] + energy_trajectory[:,1]
-E_tot_min = np.mean(E_tot) - 100   # lower limit of E_tot axis
-E_tot_max = np.mean(E_tot) + 100   # upper limit of E_tot axis
+E_tot = energy_trajectory[:,0] + energy_trajectory[:,1]         # sum of pot and kin energy
+E_tot_min = np.mean(E_tot) - 100                                # lower limit of E_tot axis
+E_tot_max = np.mean(E_tot) + 100                                # upper limit of E_tot axis
 
 plt.figure(figsize=(8, 6))
 plt.plot(time_ps, E_tot) 
