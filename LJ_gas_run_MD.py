@@ -290,6 +290,26 @@ plt.ylabel("E_kin [kJ/mol]", fontsize=14)
 plt.savefig(file_name_base + "_Ekin.png", dpi=300, bbox_inches='tight')
 plt.show()
 
+
+
+
+#
+# Total Energy
+#
+E_tot = energy_trajectory[:,0] + energy_trajectory[:,1]
+E_tot_min = np.mean(E_tot) - 100   # lower limit of E_tot axis
+E_tot_max = np.mean(E_tot) + 100   # upper limit of E_tot axis
+
+plt.figure(figsize=(8, 6))
+plt.plot(time_ps, E_tot) 
+plt.ylim(E_tot_min, E_tot_max)
+plt.xlabel("time [ps]", fontsize=14)
+plt.ylabel("E_tot [kJ/mol]", fontsize=14)
+
+plt.savefig(file_name_base + "_Etot.png", dpi=300, bbox_inches='tight')
+plt.show()
+
+
 #
 # temperature
 # 
@@ -319,6 +339,8 @@ plt.ylabel("P [Pa]", fontsize=14)
 
 plt.savefig(file_name_base + "_P.png", dpi=300, bbox_inches='tight')
 plt.show()
+
+
 
 
 #--------------------------------------
