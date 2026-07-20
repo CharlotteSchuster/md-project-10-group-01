@@ -83,14 +83,14 @@ epsilon_argon = 120*R*1e-3      # epsilon in kJ/mol Argon: 120
 
 # simulation
 total_time = 100        # ADDED: total simulation run time in ps 
-dt = 0.1                # ps
+dt = 0.001                # ps
 n_steps = 1000
 temperature = 300       # K
-box_length = 50        # nm
+box_length = 25        # nm
 tau_thermostat = 1      # thermostat coupling constant in 1/ps
 rij_min = 1e-2          # nm
 NVT = False              # switch to decide between NVT and NVE
-LEAPFROG = False        # switch to decide if the script uses the velocity Verlet or Leapfrog integrator
+LEAPFROG = True        # switch to decide if the script uses the velocity Verlet or Leapfrog integrator
 RSeed = True            # switch to decide if the random seed is used or not
 random_seed = 42        # a random seed (RSeed = True) is necessary for comparisons between integrators
 

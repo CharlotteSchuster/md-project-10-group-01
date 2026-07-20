@@ -5,3 +5,5 @@
 *.xyz
 *.dat
 *.out
+*.pyc
+__pycache__/
