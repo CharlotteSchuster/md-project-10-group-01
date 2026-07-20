@@ -98,12 +98,12 @@ continue_ = str(input("Did you change all of the parameters and file names corre
 if continue_ != "y":
     print("Check again the parameters!")
     raise SystemExit
-# TODO: If we want to compare two runs with RMSE with different time steps we need to
+# If we want to compare two runs with RMSE with different time steps we need to
 # have same total simulation time and same number of frames!
 # In the analysis script it is then resampled.
 # We can do it an an optional toggle to keep this script cleaner
 match_sim_time = True # switch to decide between matching simulation times or not
-# TODO: Readjustig the number of time step if simulation time must be matched.
+# Readjustig the number of time step if simulation time must be matched.
 if match_sim_time == True:
     n_steps = int(total_time / dt)
 

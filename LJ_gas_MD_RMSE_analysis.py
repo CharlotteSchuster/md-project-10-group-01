@@ -3,16 +3,18 @@ LJ_gas_MD_RMSE_analysis.py
 
 This is a supporting program to the LJ_gas.py and LJ_gas_run_MD.py programs 
 to analyze the simulated trajectories and calculate the Root Mean Square Error (RMSE) 
-to analyze trajectory stability of the ensembles and integrators (plotting). 
+to analyze trajectory stability of the ensembles and integrators. 
 
-For the RMSE calculation the program requires
-and input of binary .npy trajectory files (reference and he one for analysis).
+For the RMSE calculation the program requires binary .npy trajectory 
+files (_pos.npy, reference run and the run for analysis). It also requires both
+of the parameters files (_params.npy)
 
 IMPORTANT: To get valid comparisons the seed (np.random.seed(42)) has to be 
 reset for each run. Before running this script run the LJ_gas_run_MD.py script
 and toggle on and off the desired integrators/ensembles. This means that the
 same number of particles have to be initialized at the same positions in both
-of the runs to be compared.
+of the runs to be compared. If needed, the program subsamples the finer trajectory to
+match the number of data points for both runs
 
 MANDATORY INPUT FILES (in .npy format):
 - trajectory for analysis
@@ -23,8 +25,8 @@ MANDATORY INPUT FILES (in .npy format):
 Author: Luka Jurecic
 Created: July 11th, 2026
 
-Modified by:
-Date: 
+Modified by: Luka Jurecic
+Date: 20th July 2026
 """
 #----------------------------------------------------------------
 #   I M P O R T S
@@ -53,7 +55,7 @@ plt.rcParams.update({
 
 #----------------------------------------------------------------
 #   FILE LOADINGS AND NAMES 
-#----------------------------------------------------------------
+
 # Change the following string variables to load the desired .npy files
 file_name_analysis = "sim_NVE_leapfrog_50nm_200particles_dt0p1_pos.npy" # Trajectory file name of the simulation to compare
 file_name_ref = "sim_NVE_vVerlet_50nm_200particles_dt0p1_pos.npy" # Trajectory file name for the reference simulation (e.g. vVerlet)
@@ -65,21 +67,26 @@ file_name_params_ref = "sim_NVE_vVerlet_50nm_200particles_dt0p1_params.npy" # Fi
 title_analysis = "NVE_Leapfrog, dt = 0.1 ps_200part_50nm"
 title_reference = "NVE_vVerlet, dt = 0.1 ps_200part_50nm"
 
-# Instead of using the txt files we can use the .npy files
-# since they are binary and can be loaded quickly, without a parser
+SaveFig = False # toggle on to save the RMSE graph to disk 
+
+# END OF USER INPUT
+# ----------------------------------------------------------------
+
 # Position .npy files have a shape of (n_steps+1, n_particles, 3) and contain the xyz positions of all particles at each timestep
 traj_file = np.load(file_name_analysis) # load trajectory file to be compared to reference
 traj_file_ref = np.load(file_name_ref) # load reference trajectory file
 
 # Loading the parameter file for calculations and plotting
-# The parameters should be the same for both runs!
+# The parameters such as particle numbers should be the same for both runs!
 params_analysis = np.load(file_name_params_analysis, allow_pickle=True).item() # load parameters from analysis run
 params_ref = np.load(file_name_params_ref, allow_pickle=True).item() # load parameters from reference run
 
+# Double check
 continue_ = str(input("Did you change all of the parameters and title correctly? (y/n) "))
 if continue_ != "y":
     print("Check again the parameters!")
     raise SystemExit
+
 #----------------------------------------------------------------
 #   CALCULATING THE RMSE OF POSITIONS
 #----------------------------------------------------------------
@@ -90,7 +97,6 @@ n_particles_ = params_analysis["n_particles"] # number of particles in the simul
 if n_particles_ != traj_file.shape[1] or n_particles_ != traj_file_ref.shape[1]:
     raise ValueError("Number of particles in the parameter file does not match the number of particles in the trajectory files.")
 
-#TODO:
 # Subsampling the trajectory with more time steps to match the number of frames (times steps)
 # in the reference trajectory.
 
@@ -110,7 +116,7 @@ else:
         raise ValueError("The trajectory file has a lower number of time steps than the trajectory file to be compared to the reference.")
 
 
-# Calculating the difference in xyz position
+# Actual RMSE calculation
 L = params_analysis["box_length"] 
 difference = traj_file - traj_file_ref # shape of (n_steps+1, n_particles, 3)
 difference -= L * np.rint(difference / L) # Minimum image convention, rounds to nearest integer
@@ -138,5 +144,6 @@ plt.xlabel(r"$t\ \mathrm{[ps]}$")
 plt.ylabel(r"$RMSE\ \mathrm{[nm]}$")
 #plt.title("RMSE of " + title_analysis + ", reference simulation " + title_reference)
 plt.tick_params(direction='in', which='both', top=True, bottom=True, left=True, right=True)
-plt.savefig(f"{title_analysis}_{title_reference}_RMSE.png", dpi=300, bbox_inches='tight')
+if SaveFig == True:
+    plt.savefig(f"{title_analysis}_{title_reference}_RMSE.png", dpi=300, bbox_inches='tight')
 plt.show()
