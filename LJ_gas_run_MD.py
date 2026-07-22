@@ -10,6 +10,12 @@ and visualizes results.
 Author: Bettina Keller
 Created: May 28, 2025
 
+Modified by: Luka Jurečič, Charlotte Schuster
+Date: July 10, 2026 #TODO
+
+Modifications include:
+#TODO
+
 This script imports all classes and functions from md_simulation.py and controls
 the simulation workflow.
 
@@ -38,7 +44,9 @@ from LJ_gas import(
     potential_energy,
     kinetic_energy,
     instantaneous_temperature,
-    ideal_gas_pressure
+    ideal_gas_pressure,
+    simulate_leapfrog_step,
+    B_step
     )
 
 #----------------------------------------------------------------
@@ -74,23 +82,71 @@ sigma_argon = 0.34              # sigma in nm     Argon: 0.34
 epsilon_argon = 120*R*1e-3      # epsilon in kJ/mol Argon: 120
 
 # simulation
-dt = 0.1             # ps
-n_steps = 1000 
-temperature = 300     # K
-box_length = 100      # nm
-tau_thermostat = 1  # thermostat coupling constant in 1/ps
-rij_min = 1e-2      # nm
-NVT = True          # switch to decide between NVT and NVE
+total_time = 100        # ADDED: total simulation run time in ps 
+dt = 0.001                # ps
+n_steps = 1000
+temperature = 300       # K
+box_length = 25        # nm
+tau_thermostat = 1      # thermostat coupling constant in 1/ps
+rij_min = 1e-2          # nm
+NVT = False              # switch to decide between NVT and NVE
+LEAPFROG = True        # switch to decide if the script uses the velocity Verlet or Leapfrog integrator
+RSeed = True            # switch to decide if the random seed is used or not
+random_seed = 42        # a random seed (RSeed = True) is necessary for comparisons between integrators
+
+continue_ = str(input("Did you change all of the parameters and file names correctly? (y/n) "))
+if continue_ != "y":
+    print("Check again the parameters!")
+    raise SystemExit
+# If we want to compare two runs with RMSE with different time steps we need to
+# have same total simulation time and same number of frames!
+# In the analysis script it is then resampled.
+# We can do it an an optional toggle to keep this script cleaner
+match_sim_time = True # switch to decide between matching simulation times or not
+# Readjustig the number of time step if simulation time must be matched.
+if match_sim_time == True:
+    n_steps = int(total_time / dt)
 
 # output
-file_name_base = "my_simulation"  # file name for all output files
+if LEAPFROG == True:
+    file_name_base = "sim_NVE_leapfrog_50nm_200particles_dt0p1"   # file name for all output files using 
+                                                    # leapfrog integrator
+elif NVT == True:
+    file_name_base = "sim_NVT_Langevin_50nm_200particles_dt0p1"   # file name for all output files using 
+                                                    # Langevin integrator (BAOAB splitting) in NVT ensemble
+
+else:
+    file_name_base = "sim_NVE_vVerlet_50nm_200particles_dt0p1"    # file name for all output files using 
+                                                    # velocity Verlet integrator in NVE ensemble
+
+# ADED Title for the plots (to make plots look nicer)
+if LEAPFROG == True:
+    title = "NVE Leapfrog"
+elif NVT == True:
+    title = "NVT Langevin"
+else:
+    title = "NVE vVerlet"
+
+# ADDED: Saving the parameters as dictionary to be able to open in cleanly in the analysis script
+params = {
+    "n_particles": n_particles,
+    "mass_argon": mass_argon,
+    "sigma_argon": sigma_argon,
+    "epsilon_argon": epsilon_argon,
+    "dt":dt,
+    "n_steps": n_steps,
+    "temperature": temperature,
+    "box_length": box_length,
+    "tau_thermostat": tau_thermostat,
+    "random_seed": random_seed
+    }
+np.save(file_name_base + "_params.npy", params) # save parameters as .npy file
 
 #----------------------------------------------------------------
 #   P R O G R A M
 #----------------------------------------------------------------
 # start the timer
 tic()
-
 #
 # initialize simulation parameters
 #
@@ -110,6 +166,10 @@ ps = ParticleSystem(n_particles)
 # fill in the parameters for argon
 for i in range(n_particles): 
     ps.set_parameters(i, mass=mass_argon, sigma=sigma_argon, epsilon=epsilon_argon)
+
+# Switch random seed or off:
+if RSeed == True:
+    np.random.seed(random_seed)
 
 # set initial positions     
 initialize_positions(ps, sim.box_length)
@@ -131,35 +191,86 @@ P_init = ideal_gas_pressure(ps, sim)
 
 
 # initialize position trajectory
-position_trajectory = np.zeros((sim.n_steps+1, n_particles, 3))
+position_trajectory = np.zeros((sim.n_steps+1, n_particles, 3)) # Information by axis (t,N,xyz) ~ (timestep, particle index, xyz positions)
 position_trajectory[0,:,:] = ps.position # initial position
 
 # initialize energy trajectory
 energy_trajectory = np.zeros((sim.n_steps+1, 4))
 energy_trajectory[0,0] = potential_energy( ps, sim)       # potential energy
 energy_trajectory[0,1] = kinetic_energy(ps)               # kinetic energy
-energy_trajectory[0,2] = instantaneous_temperature(ps)    # instantaneous pressure
+energy_trajectory[0,2] = instantaneous_temperature(ps)    # instantaneous temperature
 energy_trajectory[0,3] = ideal_gas_pressure(ps, sim)      # ideal gas pressure
 
 
 #--------------------------------------------------
 #  The acutal MD simulation
 #--------------------------------------------------
+
+# For the leapfrog algoritm we need to do a half B step forward before 
+# entering the function simulate_leapfrog_step(ps, sim)
+# (to have the velocities from v(t = 0) --> v(t = 0+1/2 delta_t)):
+if LEAPFROG == True:
+    B_step(ps, sim, half_step=True)
+
+
+
 for i in range(sim.n_steps):
-    if NVT==True:
-        simulate_NVT_step(ps, sim)
-    else: 
-        simulate_NVE_step(ps, sim)
+    '''
+    This loop computes potential and kintetic energiy updates, instantaneous temperature updates and ideal gas pressure updates
+    for every simulation step;
+    with respect to the Leapfrog algorithm, the Langevin integrator or the velocity Verlet integrator
+    '''
+    if LEAPFROG == True:
+        '''
+        This is the loop for the Leapfrog algorithm
+        For every time step, the function simulate_leapfrog_step(ps, sim) is called
+        '''
+        v_before = ps.velocity.copy()                           # store the velocities before the loop, 
+                                                                # so if t=0, it stores v(0 + 0.5 * delta_t)
+        simulate_leapfrog_step(ps, sim)                         # simulates one leapfrog step
+                                                                # first loop: positions at t = 1, velocities at t = 1.5 * delta_t                
+        v_after = ps.velocity.copy()                            # store the velocities after the loop, so if i=0 (which means t=1)
+                                                                # it stores v(1.5 * delta_t)
+        v_sync = 0.5 * (v_before + v_after)                     # averaged velocity at integer time step
+                                                                # for the first loop v(t = 1)
+        
+        # Using synchronized velocity for energy calculation
+        v_actual = ps.velocity.copy()                           # store the actual velocity (at half time step)
+        ps.velocity = v_sync                                    # temporarily replacing the velocity with the synchronized velocity 
+
+        #Now calculating the energies with the synchronized velocity (at integer time step)
+        energy_trajectory[i+1,0] = potential_energy(ps,sim)     # calculate the potential energy with the synchronized velocity
+        energy_trajectory[i+1,1] = kinetic_energy(ps)           # calculate the kinetic energy with the synchronized velocity
+        energy_trajectory[i+1,2] = instantaneous_temperature(ps)# calculate the instantaneous temperature with the synchronized velocity
+        energy_trajectory[i+1,3] = ideal_gas_pressure(ps, sim)  # calculate the ideal gas pressure with the synchronized velocity
+
+        ps.velocity = v_actual                                  # replace the velocity back to the actual velocity (at half time step)
+    
+    else:
+        if NVT==True:
+            '''
+            This is the loop for the Langevin integrator (BAOAB splitting) in NVT ensemble
+            For every time step, the function simulate_NVT_step(ps, sim) is called
+            '''
+            simulate_NVT_step(ps, sim)
+            
+        else: 
+            '''
+            This is the loop for the velocity Verlet integrator in NVE ensemble.
+            For every time step, the function simulate_NVE_step(ps, sim) is called
+            '''
+            simulate_NVE_step(ps, sim)
+        
+        # store updated energies, temperature and pressure
+        energy_trajectory[i+1,0] = potential_energy( ps, sim)     # potential energy
+        energy_trajectory[i+1,1] = kinetic_energy(ps)             # kinetic energy
+        energy_trajectory[i+1,2] = instantaneous_temperature(ps)  # instantaneous temperature
+        energy_trajectory[i+1,3] = ideal_gas_pressure(ps, sim)    # ideal gas pressure
+    
+        
         
     # store updated positions
     position_trajectory[i+1,:,:] = ps.position # store updated positions
-
-    # store updated energies, temperature and pressure
-    energy_trajectory[i+1,0] = potential_energy( ps, sim)     # potential energy
-    energy_trajectory[i+1,1] = kinetic_energy(ps)             # kinetic energy
-    energy_trajectory[i+1,2] = instantaneous_temperature(ps)  # instantaneous pressure
-    energy_trajectory[i+1,3] = ideal_gas_pressure(ps, sim)    # ideal gas pressure
-
 
 #--------------------------------------
 # W R I T E    T R A J E C T O R I E S 
@@ -169,6 +280,7 @@ write_xyz_trajectory(file_name_base + "_pos.xyz", position_trajectory, atom_symb
 # write energy trajectory to file (binary and text)
 np.save(file_name_base + "_ene.npy", energy_trajectory)
 np.savetxt(file_name_base + "_ene.dat", energy_trajectory, fmt="%.6e", header="#E_pot  E_kin  T  P", comments='')
+np.save(file_name_base + "_pos.npy", position_trajectory) # ADED: to save position trajectories as .npy file
 
 
 #----------------------------------------------------
@@ -187,10 +299,11 @@ plt.figure(figsize=(8, 6))
 plt.plot(time_ps, energy_trajectory[:,0]) 
 plt.ylim(E_pot_min, E_pot_max)
 plt.xlabel("time [ps]", fontsize=14)
+plt.title("Potential energy, " + title) # Added the title to the graph
 plt.ylabel("E_pot [kJ/mol]", fontsize=14)
 
 plt.savefig(file_name_base + "_Epot.png", dpi=300, bbox_inches='tight')
-plt.show()
+#plt.show()
 
 #
 # kinetic energy
@@ -200,12 +313,34 @@ E_kin_max = np.mean(energy_trajectory[:,1]) + 100   # upper limit of E_kin axis
 
 plt.figure(figsize=(8, 6))
 plt.plot(time_ps, energy_trajectory[:,1]) 
-plt.ylim(E_kin_min, E_kin_max)
+#plt.ylim(E_kin_min, E_kin_max)
 plt.xlabel("time [ps]", fontsize=14)
 plt.ylabel("E_kin [kJ/mol]", fontsize=14)
+plt.title("Kinetic energy, " + title) # Added the title to the graph
 
 plt.savefig(file_name_base + "_Ekin.png", dpi=300, bbox_inches='tight')
-plt.show()
+#plt.show()
+
+
+
+
+#
+# Total Energy
+#
+E_tot = energy_trajectory[:,0] + energy_trajectory[:,1]         # sum of pot and kin energy
+E_tot_min = np.mean(E_tot) - 100                                # lower limit of E_tot axis
+E_tot_max = np.mean(E_tot) + 100                                # upper limit of E_tot axis
+
+plt.figure(figsize=(8, 6))
+plt.plot(time_ps, E_tot) 
+plt.ylim(E_tot_min, E_tot_max)
+plt.xlabel("time [ps]", fontsize=14)
+plt.title("Total energy, " + title) # Added the title to the graph
+plt.ylabel("E_tot [kJ/mol]", fontsize=14)
+
+plt.savefig(file_name_base + "_Etot.png", dpi=300, bbox_inches='tight')
+#plt.show()
+
 
 #
 # temperature
@@ -215,12 +350,13 @@ T_max = np.mean(energy_trajectory[:,2]) + 100   # upper limit of T axis
 
 plt.figure(figsize=(8, 6))
 plt.plot(time_ps, energy_trajectory[:,2]) 
-plt.ylim(T_min, T_max)
+#plt.ylim(T_min, T_max)
 plt.xlabel("time [ps]", fontsize=14)
 plt.ylabel("T [K]", fontsize=14)
+plt.title("Temperature, " + title) # Added the title to the graph
 
 plt.savefig(file_name_base + "_T.png", dpi=300, bbox_inches='tight')
-plt.show()
+#plt.show()
 
 #
 # pressure
@@ -233,9 +369,12 @@ plt.plot(time_ps, energy_trajectory[:,3])
 plt.ylim(P_min, P_max)
 plt.xlabel("time [ps]", fontsize=14)
 plt.ylabel("P [Pa]", fontsize=14)
+plt.title("Pressure, " + title) # Added the title to the graph
 
 plt.savefig(file_name_base + "_P.png", dpi=300, bbox_inches='tight')
-plt.show()
+#plt.show()
+
+
 
 
 #--------------------------------------
