@@ -11,10 +11,13 @@ Author: Bettina Keller
 Created: May 28, 2025
 
 Modified by: Luka Jurečič, Charlotte Schuster
-Date: July 10, 2026 #TODO
+Date: July 22, 2026
 
 Modifications include:
-#TODO
+-adding the Leapfrog Implementation into the simulation loop
+-adding plots for position, velocity trajectory and total energy
+-changing plot parameters
+
 
 This script imports all classes and functions from md_simulation.py and controls
 the simulation workflow.
@@ -49,6 +52,16 @@ from LJ_gas import(
     B_step
     )
 
+#defining plotting parameters
+plt.rcParams.update({
+    'font.size': 22,        
+    'axes.labelsize': 24,      
+    'xtick.labelsize': 22,     
+    'ytick.labelsize': 22, 
+    'legend.fontsize': 22,       
+})
+
+
 #----------------------------------------------------------------
 #   F U N C T I O N S
 #----------------------------------------------------------------
@@ -82,15 +95,15 @@ sigma_argon = 0.34              # sigma in nm     Argon: 0.34
 epsilon_argon = 120*R*1e-3      # epsilon in kJ/mol Argon: 120
 
 # simulation
-total_time = 100        # ADDED: total simulation run time in ps 
-dt = 0.001                # ps
-n_steps = 1000
+total_time = 100        # ADDED: total simulation run time in ps
+dt = 0.1                # ps
+n_steps = 1000 
 temperature = 300       # K
-box_length = 25        # nm
+box_length = 100        # nm
 tau_thermostat = 1      # thermostat coupling constant in 1/ps
 rij_min = 1e-2          # nm
-NVT = False              # switch to decide between NVT and NVE
-LEAPFROG = True        # switch to decide if the script uses the velocity Verlet or Leapfrog integrator
+NVT = False             # switch to decide between NVT and NVE
+LEAPFROG = True         # switch to decide if the script uses the velocity Verlet or Leapfrog integrator
 RSeed = True            # switch to decide if the random seed is used or not
 random_seed = 42        # a random seed (RSeed = True) is necessary for comparisons between integrators
 
@@ -101,7 +114,7 @@ if continue_ != "y":
 # If we want to compare two runs with RMSE with different time steps we need to
 # have same total simulation time and same number of frames!
 # In the analysis script it is then resampled.
-# We can do it an an optional toggle to keep this script cleaner
+# We can do it at an optional toggle to keep this script cleaner
 match_sim_time = True # switch to decide between matching simulation times or not
 # Readjustig the number of time step if simulation time must be matched.
 if match_sim_time == True:
@@ -109,17 +122,17 @@ if match_sim_time == True:
 
 # output
 if LEAPFROG == True:
-    file_name_base = "sim_NVE_leapfrog_50nm_200particles_dt0p1"   # file name for all output files using 
+    file_name_base = "sim_NVE_leapfrog"   # file name for all output files using 
                                                     # leapfrog integrator
 elif NVT == True:
-    file_name_base = "sim_NVT_Langevin_50nm_200particles_dt0p1"   # file name for all output files using 
+    file_name_base = "sim_NVT_Langevin"   # file name for all output files using 
                                                     # Langevin integrator (BAOAB splitting) in NVT ensemble
 
 else:
-    file_name_base = "sim_NVE_vVerlet_50nm_200particles_dt0p1"    # file name for all output files using 
+    file_name_base = "sim_NVE_vVerlet"    # file name for all output files using 
                                                     # velocity Verlet integrator in NVE ensemble
 
-# ADED Title for the plots (to make plots look nicer)
+# ADDED Title for the plots (to make plots look nicer)
 if LEAPFROG == True:
     title = "NVE Leapfrog"
 elif NVT == True:
@@ -191,7 +204,8 @@ P_init = ideal_gas_pressure(ps, sim)
 
 
 # initialize position trajectory
-position_trajectory = np.zeros((sim.n_steps+1, n_particles, 3)) # Information by axis (t,N,xyz) ~ (timestep, particle index, xyz positions)
+# Information by axis (t,N,xyz) ~ (timestep, particle index, xyz positions)
+position_trajectory = np.zeros((sim.n_steps+1, n_particles, 3)) 
 position_trajectory[0,:,:] = ps.position # initial position
 
 # initialize energy trajectory
@@ -200,6 +214,13 @@ energy_trajectory[0,0] = potential_energy( ps, sim)       # potential energy
 energy_trajectory[0,1] = kinetic_energy(ps)               # kinetic energy
 energy_trajectory[0,2] = instantaneous_temperature(ps)    # instantaneous temperature
 energy_trajectory[0,3] = ideal_gas_pressure(ps, sim)      # ideal gas pressure
+
+
+
+# modification
+# Initialise storage of velocity
+velocity_trajectory = np.zeros((sim.n_steps+1,n_particles, 3))
+velocity_trajectory[0,:,:] = ps.velocity #initial velocity is stored
 
 
 #--------------------------------------------------
@@ -238,6 +259,10 @@ for i in range(sim.n_steps):
         v_actual = ps.velocity.copy()                           # store the actual velocity (at half time step)
         ps.velocity = v_sync                                    # temporarily replacing the velocity with the synchronized velocity 
 
+        #modification
+        velocity_trajectory[i+1,:,:] = ps.velocity              # we want to store the integer velocity to plot
+        
+
         #Now calculating the energies with the synchronized velocity (at integer time step)
         energy_trajectory[i+1,0] = potential_energy(ps,sim)     # calculate the potential energy with the synchronized velocity
         energy_trajectory[i+1,1] = kinetic_energy(ps)           # calculate the kinetic energy with the synchronized velocity
@@ -260,14 +285,15 @@ for i in range(sim.n_steps):
             For every time step, the function simulate_NVE_step(ps, sim) is called
             '''
             simulate_NVE_step(ps, sim)
-        
+
         # store updated energies, temperature and pressure
         energy_trajectory[i+1,0] = potential_energy( ps, sim)     # potential energy
         energy_trajectory[i+1,1] = kinetic_energy(ps)             # kinetic energy
         energy_trajectory[i+1,2] = instantaneous_temperature(ps)  # instantaneous temperature
         energy_trajectory[i+1,3] = ideal_gas_pressure(ps, sim)    # ideal gas pressure
     
-        
+        #modification
+        velocity_trajectory[i+1,:,:] = ps.velocity        # we want to store the integer velocity to plot
         
     # store updated positions
     position_trajectory[i+1,:,:] = ps.position # store updated positions
@@ -280,7 +306,7 @@ write_xyz_trajectory(file_name_base + "_pos.xyz", position_trajectory, atom_symb
 # write energy trajectory to file (binary and text)
 np.save(file_name_base + "_ene.npy", energy_trajectory)
 np.savetxt(file_name_base + "_ene.dat", energy_trajectory, fmt="%.6e", header="#E_pot  E_kin  T  P", comments='')
-np.save(file_name_base + "_pos.npy", position_trajectory) # ADED: to save position trajectories as .npy file
+np.save(file_name_base + "_pos.npy", position_trajectory) # ADDED: to save position trajectories as .npy file
 
 
 #----------------------------------------------------
@@ -298,12 +324,13 @@ E_pot_max = np.mean(energy_trajectory[:,0]) + 1   # upper limit of E_pot axis
 plt.figure(figsize=(8, 6))
 plt.plot(time_ps, energy_trajectory[:,0]) 
 plt.ylim(E_pot_min, E_pot_max)
-plt.xlabel("time [ps]", fontsize=14)
-plt.title("Potential energy, " + title) # Added the title to the graph
-plt.ylabel("E_pot [kJ/mol]", fontsize=14)
+plt.xlabel(r"$t$ [ps]")
+plt.ylabel(r"$E_{\mathrm{pot}}$ [kJ/mol]")
 
+plt.tick_params(direction='in', which='both', top=True, bottom=True, left=True, right=True)
+plt.tight_layout()
 plt.savefig(file_name_base + "_Epot.png", dpi=300, bbox_inches='tight')
-#plt.show()
+plt.show()
 
 #
 # kinetic energy
@@ -313,14 +340,14 @@ E_kin_max = np.mean(energy_trajectory[:,1]) + 100   # upper limit of E_kin axis
 
 plt.figure(figsize=(8, 6))
 plt.plot(time_ps, energy_trajectory[:,1]) 
-#plt.ylim(E_kin_min, E_kin_max)
-plt.xlabel("time [ps]", fontsize=14)
-plt.ylabel("E_kin [kJ/mol]", fontsize=14)
-plt.title("Kinetic energy, " + title) # Added the title to the graph
+plt.ylim(E_kin_min, E_kin_max)
+plt.xlabel(r"$t$ [ps]")
+plt.ylabel(r"$E_{\mathrm{kin}}$ [kJ/mol]")
 
+plt.tick_params(direction='in', which='both', top=True, bottom=True, left=True, right=True)
+plt.tight_layout()
 plt.savefig(file_name_base + "_Ekin.png", dpi=300, bbox_inches='tight')
-#plt.show()
-
+plt.show()
 
 
 
@@ -328,19 +355,19 @@ plt.savefig(file_name_base + "_Ekin.png", dpi=300, bbox_inches='tight')
 # Total Energy
 #
 E_tot = energy_trajectory[:,0] + energy_trajectory[:,1]         # sum of pot and kin energy
-E_tot_min = np.mean(E_tot) - 100                                # lower limit of E_tot axis
-E_tot_max = np.mean(E_tot) + 100                                # upper limit of E_tot axis
+E_tot_min = np.mean(E_tot) - 5                                # lower limit of E_tot axis
+E_tot_max = np.mean(E_tot) + 5                               # upper limit of E_tot axis
 
 plt.figure(figsize=(8, 6))
 plt.plot(time_ps, E_tot) 
 plt.ylim(E_tot_min, E_tot_max)
-plt.xlabel("time [ps]", fontsize=14)
-plt.title("Total energy, " + title) # Added the title to the graph
-plt.ylabel("E_tot [kJ/mol]", fontsize=14)
+plt.xlabel(r"$t$ [ps]")
+plt.ylabel(r"$E_{\mathrm{tot}}$ [kJ/mol]")
 
+plt.tick_params(direction='in', which='both', top=True, bottom=True, left=True, right=True)
+plt.tight_layout()
 plt.savefig(file_name_base + "_Etot.png", dpi=300, bbox_inches='tight')
-#plt.show()
-
+plt.show()
 
 #
 # temperature
@@ -350,13 +377,14 @@ T_max = np.mean(energy_trajectory[:,2]) + 100   # upper limit of T axis
 
 plt.figure(figsize=(8, 6))
 plt.plot(time_ps, energy_trajectory[:,2]) 
-#plt.ylim(T_min, T_max)
-plt.xlabel("time [ps]", fontsize=14)
-plt.ylabel("T [K]", fontsize=14)
-plt.title("Temperature, " + title) # Added the title to the graph
+plt.ylim(T_min, T_max)
+plt.xlabel(r"$t$ [ps]")
+plt.ylabel(r"$T$ [K]")
 
+plt.tick_params(direction='in', which='both', top=True, bottom=True, left=True, right=True)
+plt.tight_layout()
 plt.savefig(file_name_base + "_T.png", dpi=300, bbox_inches='tight')
-#plt.show()
+plt.show()
 
 #
 # pressure
@@ -367,14 +395,159 @@ P_max = np.mean(energy_trajectory[:,3]) + 200   # upper limit of P axis
 plt.figure(figsize=(8, 6))
 plt.plot(time_ps, energy_trajectory[:,3]) 
 plt.ylim(P_min, P_max)
-plt.xlabel("time [ps]", fontsize=14)
-plt.ylabel("P [Pa]", fontsize=14)
-plt.title("Pressure, " + title) # Added the title to the graph
+plt.xlabel(r"$t$ [ps]")
+plt.ylabel(r"$P$ [Pa]")
 
+plt.tick_params(direction='in', which='both', top=True, bottom=True, left=True, right=True)
+plt.tight_layout()
 plt.savefig(file_name_base + "_P.png", dpi=300, bbox_inches='tight')
-#plt.show()
+plt.show()
 
 
+
+
+# modification
+#
+# plot 3D trajectory of multiple particles
+#
+
+fig = plt.figure(figsize=(10, 9), constrained_layout=True)
+ax = fig.add_subplot(111, projection='3d')
+
+colors = [
+    "#0072B2",  
+    "#E69F00",  
+    "#009E73",
+    "#CC79A7",  
+    "#D55E00",
+    "#56B4E9",  
+]
+
+particles = [0, 1, 2, 3, 4, 5]
+
+for j, p in enumerate(particles):
+
+    x = position_trajectory[:, p, 0]
+    y = position_trajectory[:, p, 1]
+    z = position_trajectory[:, p, 2]
+
+    for i in range(len(x)-1):
+
+        # checking whether PBC jump took place
+        if (abs(x[i+1]-x[i]) > sim.box_length/2 or
+            abs(y[i+1]-y[i]) > sim.box_length/2 or
+            abs(z[i+1]-z[i]) > sim.box_length/2):
+
+            linestyle = "--"
+            color = "0.6"      # grau
+
+        else:
+            linestyle = "-"
+            color = colors[j]
+
+        ax.plot(x[i:i+2],
+                y[i:i+2],
+                z[i:i+2],
+                linestyle=linestyle,
+                color=color,
+                lw=1.5)
+
+ax.set_xlim(0, sim.box_length)
+ax.set_ylim(0, sim.box_length)
+ax.set_zlim(0, sim.box_length)
+
+# draw simulation box 
+L = sim.box_length
+
+# untere Fläche
+ax.plot([0,L],[0,0],[0,0],'k')
+ax.plot([L,L],[0,L],[0,0],'k')
+ax.plot([L,0],[L,L],[0,0],'k')
+ax.plot([0,0],[L,0],[0,0],'k')
+
+# obere Fläche
+ax.plot([0,L],[0,0],[L,L],'k')
+ax.plot([L,L],[0,L],[L,L],'k')
+ax.plot([L,0],[L,L],[L,L],'k')
+ax.plot([0,0],[L,0],[L,L],'k')
+
+# vertikale Kanten
+ax.plot([0,0],[0,0],[0,L],'k')
+ax.plot([L,L],[0,0],[0,L],'k')
+ax.plot([L,L],[L,L],[0,L],'k')
+ax.plot([0,0],[L,L],[0,L],'k')
+
+ax.set_xlabel(r"$x$ [nm]", labelpad=25)
+ax.set_ylabel(r"$y$ [nm]", labelpad=25)
+ax.set_zlabel(r"$z$ [nm]", labelpad=20)
+
+ax.tick_params(axis='x', pad=10)
+ax.tick_params(axis='y', pad=10)
+ax.tick_params(axis='z', pad=10)
+
+ticks = [0, 50, 100]
+
+ax.set_xticks(ticks)
+ax.set_yticks(ticks)
+ax.set_zticks(ticks)
+
+ax.set_box_aspect((1, 1, 1))
+
+ax.xaxis.pane.fill = False
+ax.yaxis.pane.fill = False
+ax.zaxis.pane.fill = False
+
+ax.grid(False)
+
+ax.view_init(elev=28, azim=-45)
+
+
+plt.tick_params(direction='in', which='both', top=True, bottom=True, left=True, right=True)
+
+
+plt.savefig(file_name_base + "_pos_traj_xyz.png", dpi=300)
+plt.show()
+
+# modification
+#
+# plotting velocities along x axis
+#
+
+plt.figure(figsize=(8, 6))
+plt.plot(time_ps[:], velocity_trajectory[:, 0, 0]) 
+plt.xlabel(r"$t$ [ps]")
+plt.ylabel(r"$v_x$ ($10^{3}$ m/s)")
+
+plt.tick_params(direction='in', which='both', top=True, bottom=True, left=True, right=True)
+plt.tight_layout()
+plt.savefig(file_name_base + "_v_x.png", dpi=300, bbox_inches='tight')
+plt.show()
+
+
+# modification
+#
+# plotting vector magtitude of the 3D-velocities vector for the first particle
+#
+
+
+plt.figure(figsize=(8, 6))
+#for p in [0, 1, 2, 3, 4, 5]:
+for p in range(100):
+    velocity_traj_magnitude = np.sqrt(
+        velocity_trajectory[:, p, 0]**2
+        + velocity_trajectory[:, p, 1]**2
+        + velocity_trajectory[:, p, 2]**2
+    )
+
+    plt.plot(time_ps, velocity_traj_magnitude, label=f"Particle {p}")
+
+plt.xlabel(r"$t$ [ps]")
+plt.ylabel(r"$|\vec{v}|$ ($10^{3}$ m/s)")
+
+plt.tick_params(direction='in', which='both', top=True, bottom=True, left=True, right=True)
+plt.tight_layout()
+plt.savefig(file_name_base + "_v_magnitude.png", dpi=300, bbox_inches='tight')
+plt.show()
 
 
 #--------------------------------------
@@ -424,4 +597,6 @@ for line in output_lines:
 # Write to file
 with open(file_name_base + ".out", "w") as f:
     for line in output_lines:
-        f.write(line + "\n")    
+        f.write(line + "\n")  
+
+   

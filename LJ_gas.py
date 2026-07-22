@@ -11,6 +11,12 @@ based on Lennard-Jones interactions.
 Author: Bettina Keller
 Created: May 28, 2025
 
+Modified by: Luka Jurečič, Charlotte Schuster
+Date: July 22, 2026
+
+Modifications include:
+-Adding the function simulate_leapfrog_step
+
 """
 
 #----------------------------------------------------------------
@@ -476,7 +482,6 @@ def simulate_leapfrog_step(ps: ParticleSystem, sim: SimulationParameters): #This
     4. Applying periodic boundary conditions.
 
     This corresponds to a time-symmetric, second-order accurate integrator for Newtonian dynamics.
-    #TODO lets discuss second-order accuracy again but I think it's correct because O(Delta**3)
 
     Parameters:
         - ps (ParticleSystem): The particle system containing positions, velocities, and forces.
