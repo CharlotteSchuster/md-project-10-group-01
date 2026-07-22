@@ -1,0 +1,15 @@
+name: md-course
+channels:
+  - defaults
+dependencies:
+  - python=3.12
+  - pandas
+  - mdtraj
+  - numpy
+  - scipy
+  - jupyterlab
+  - nglview
+  - openmm
+  - matplotlib
+  - ipykernel
+prefix: /home/giselle/miniconda3/envs/md-course
